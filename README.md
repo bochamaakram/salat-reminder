@@ -48,3 +48,15 @@ The extension requires the following permissions to function fully:
 - `content.js`: Handles displaying the blocker overlay and the 5-minute warning modal on web pages.
 - `options.html` / `options.js`: The settings page UI and logic.
 - `popup.html` / `popup.js`: The extension's toolbar popup.
+
+## DEMO
+
+<video controls>
+    <source src="assets/demo.mp4" type="video/mp4">
+</video>
+
+
+## Prayer blocker screens
+
+![DEMO](assets/1.jpeg)
+![DEMO](assets/2.jpeg)
