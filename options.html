@@ -386,6 +386,66 @@
       color: #1A3D2B;
       font-weight: 600;
     }
+
+    .city-autocomplete { position: relative; }
+    .city-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .city-input-wrap input { padding-right: 32px; }
+    .city-input-wrap::after {
+      content: '⌄';
+      position: absolute;
+      right: 12px;
+      font-size: 12px;
+      color: rgba(26,61,43,0.3);
+      pointer-events: none;
+      transition: transform 0.2s;
+    }
+    .city-input-wrap.open::after { transform: rotate(180deg); }
+    .city-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(26,61,43,0.15);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      z-index: 100;
+      max-height: 240px;
+      overflow-y: auto;
+      display: none;
+    }
+    .city-dropdown.open { display: block; animation: fadeIn 0.15s ease; }
+    .city-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #2D2D2D;
+      border-bottom: 1px solid rgba(26,61,43,0.06);
+      transition: background 0.12s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .city-item:last-child { border-bottom: none; }
+    .city-item:hover, .city-item.active {
+      background: rgba(26,61,43,0.08);
+    }
+    .city-item .ci-city { font-weight: 500; }
+    .city-item .ci-country {
+      font-size: 0.72rem;
+      color: rgba(26,61,43,0.45);
+    }
+    .ci-loading {
+      color: rgba(26,61,43,0.4);
+      font-size: 0.8rem;
+      padding: 12px 14px;
+      text-align: center;
+    }
   </style>
 </head>
 
@@ -409,21 +469,22 @@
     <div class="tab-content active" id="tab-location">
       <div class="card">
         <div class="card-title" data-i18n="cardLocation">Location</div>
-        <div class="form-group">
-          <label data-i18n="labelCity">City</label>
-          <input type="text" id="city" placeholder="e.g. Cairo, London, New York…" data-i18n-placeholder="placeholderCity" />
+    <div class="form-group">
+      <label data-i18n="labelCity">City</label>
+      <div class="city-autocomplete">
+        <div class="city-input-wrap">
+          <input type="text" id="city" placeholder="e.g. Cairo, London, New York…" data-i18n-placeholder="placeholderCity" autocomplete="off" />
         </div>
-        <div class="form-group">
-          <label data-i18n="labelCountry">Country</label>
-          <input type="text" id="country" placeholder="e.g. Egypt, UK, USA…" data-i18n-placeholder="placeholderCountry" />
-        </div>
+        <input type="hidden" id="country" />
+        <div class="city-dropdown" id="city-dropdown"></div>
+      </div>
+    </div>
         <button class="btn" id="btn-detect" style="width:100%;margin-top:4px;">
           <span data-i18n="btnDetect">Auto-detect my location</span>
         </button>
       </div>
     </div>
-
-    <!-- Calculation Tab -->
+<!-- Calculation Tab -->
     <div class="tab-content" id="tab-calculation">
       <div class="card">
         <div class="card-title" data-i18n="cardCalculation">Calculation Method</div>
