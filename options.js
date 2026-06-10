@@ -243,6 +243,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('btn-add-task').addEventListener('click', addTask);
+
+  initializeCityAutocomplete();
 });
 
 async function loadSettings() {
@@ -390,6 +392,128 @@ async function addTask() {
   
   // Tell background to update alarms
   chrome.runtime.sendMessage({ type: 'UPDATE_TASKS', settings });
+}
+
+function initializeCityAutocomplete() {
+    const cityInput = document.getElementById('city');
+    const dropdown = document.getElementById('city-dropdown');
+    const countryInput = document.getElementById('country');
+    if (!cityInput || !dropdown) return;
+
+    let debounceTimer;
+    let activeIndex = -1;
+    let suggestions = [];
+
+    function closeDropdown() {
+        dropdown.classList.remove('open');
+        document.querySelector('.city-input-wrap')?.classList.remove('open');
+        dropdown.innerHTML = '';
+        activeIndex = -1;
+        suggestions = [];
+    }
+
+    function highlightItem(index) {
+        dropdown.querySelectorAll('.city-item').forEach((el, i) => {
+            el.classList.toggle('active', i === index);
+        });
+    }
+
+    cityInput.addEventListener('input', () => {
+        const query = cityInput.value.trim();
+        countryInput.value = '';
+
+        if (query.length < 3) {
+            closeDropdown();
+            return;
+        }
+
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchSuggestions(query), 300);
+    });
+
+    cityInput.addEventListener('keydown', (e) => {
+        if (!dropdown.classList.contains('open')) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, suggestions.length - 1);
+            highlightItem(activeIndex);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            highlightItem(activeIndex);
+        } else if (e.key === 'Enter' && activeIndex >= 0) {
+            e.preventDefault();
+            selectSuggestion(suggestions[activeIndex]);
+        } else if (e.key === 'Escape') {
+            closeDropdown();
+        }
+    });
+
+    cityInput.addEventListener('blur', () => {
+        setTimeout(closeDropdown, 150);
+    });
+
+    cityInput.addEventListener('focus', () => {
+        if (suggestions.length > 0 && cityInput.value.trim().length >= 3) {
+            dropdown.classList.add('open');
+        }
+    });
+
+    async function fetchSuggestions(query) {
+        dropdown.innerHTML = '<div class="ci-loading">Searching…</div>';
+        dropdown.classList.add('open');
+        document.querySelector('.city-input-wrap')?.classList.add('open');
+
+        try {
+            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=8&language=en&format=json`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(res.status);
+
+            const data = await res.json();
+            suggestions = [];
+            const seen = new Set();
+            const q = query.toLowerCase();
+
+            (data.results || []).forEach(item => {
+                const city = item.name;
+                const country = item.country;
+                if (!city || !country) return;
+
+                if (!city.toLowerCase().includes(q)) return;
+
+                const key = `${city}|${country}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+
+                suggestions.push({ city, country, label: `${city}, ${country}` });
+            });
+
+            if (suggestions.length === 0) {
+                dropdown.innerHTML = '<div class="ci-loading">No results found</div>';
+                return;
+            }
+
+            dropdown.innerHTML = suggestions.map((s, i) =>
+                `<div class="city-item" data-index="${i}"><span class="ci-city">${s.city}</span><span class="ci-country">${s.country}</span></div>`
+            ).join('');
+
+            dropdown.querySelectorAll('.city-item').forEach(el => {
+                el.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    selectSuggestion(suggestions[parseInt(el.dataset.index)]);
+                });
+            });
+        } catch {
+            dropdown.innerHTML = '<div class="ci-loading">Error fetching results</div>';
+        }
+    }
+
+    function selectSuggestion(s) {
+        cityInput.value = s.city;
+        countryInput.value = s.country;
+        closeDropdown();
+    }
 }
 
 function renderTasks(tasks) {

@@ -107,6 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-settings').addEventListener('click', openSettings);
   document.getElementById('btn-settings-full').addEventListener('click', openSettings);
   document.getElementById('widget-btn-settings').addEventListener('click', openSettings);
+  document.getElementById('location-row').addEventListener('click', () => {
+    const settings = document.getElementById('location-text');
+    if (settings?.style.cursor === 'pointer') openSettings();
+  });
 });
 
 function forceFetch() {
@@ -177,9 +181,13 @@ function renderLocation(settings) {
   const el = document.getElementById('location-text');
   if (settings?.city) {
     el.textContent = `${settings.city}, ${settings.country}`;
+    el.style.cursor = 'default';
+    el.title = '';
   } else {
     const t = TRANSLATIONS[currentLang] || TRANSLATIONS['en'];
     el.textContent = t.noLocation;
+    el.style.cursor = 'pointer';
+    el.title = t.btnSettings;
   }
 }
 
