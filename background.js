@@ -31,10 +31,12 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
   await scheduleDailyRefresh();
   await fetchAndSchedule();
+  await checkAndClearStaleBlock();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await fetchAndSchedule();
+  await checkAndClearStaleBlock();
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -46,7 +48,19 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
+  const now = Date.now();
+
   if (alarm.name.startsWith('warn_')) {
+    const data = await chrome.storage.local.get('settings');
+    const settings = data.settings || {};
+    const notifyBefore = settings.notifyBefore || 5;
+
+    // Discard warnings if triggered late (e.g. after the prayer has already started)
+    if (now - alarm.scheduledTime > notifyBefore * 60 * 1000) {
+      console.warn(`[PrayerBlocker] Ignoring late warning alarm: ${alarm.name}`);
+      return;
+    }
+
     const prayer = alarm.name.replace('warn_', '');
     
     // Notify all tabs to show the warning modal
@@ -68,6 +82,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 
   if (alarm.name.startsWith('task_')) {
+    // Discard custom task triggers if more than 10 minutes late
+    if (now - alarm.scheduledTime > 10 * 60 * 1000) {
+      console.warn(`[PrayerBlocker] Ignoring late task alarm: ${alarm.name}`);
+      return;
+    }
+
     const data = await chrome.storage.local.get('settings');
     const settings = data.settings || {};
     const tasks = settings.tasks || [];
@@ -80,6 +100,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
   if (alarm.name.startsWith(ALARM_PREFIX)) {
     const prayer = alarm.name.replace(ALARM_PREFIX, '');
+
+    // Discard prayer blocks if more than 15 minutes late
+    if (now - alarm.scheduledTime > 15 * 60 * 1000) {
+      console.warn(`[PrayerBlocker] Ignoring late prayer alarm: ${alarm.name}`);
+      return;
+    }
+
     await triggerBlock(prayer);
   }
 });
@@ -126,7 +153,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === 'IS_BLOCKED') {
-    chrome.storage.local.get('blocked', (d) => sendResponse({ blocked: d.blocked }));
+    chrome.storage.local.get(['blocked', 'prayerBlockStartTime'], (d) => {
+      if (d.blocked && d.prayerBlockStartTime) {
+        const elapsed = Date.now() - d.prayerBlockStartTime;
+        const EXPIRATION_THRESHOLD = 45 * 60 * 1000; // 45 minutes
+        if (elapsed > EXPIRATION_THRESHOLD) {
+          unblock().then(() => sendResponse({ blocked: false }));
+          return;
+        }
+      }
+      sendResponse({ blocked: d.blocked });
+    });
     return true;
   }
 });
@@ -275,7 +312,8 @@ async function scheduleDailyRefresh() {
 // Block / Unblock
 // ──────────────────────────────────────────────────────────────────────────────
 async function triggerBlock(prayer) {
-  await chrome.storage.local.set({ blocked: true, currentPrayer: prayer });
+  const now = Date.now();
+  await chrome.storage.local.set({ blocked: true, currentPrayer: prayer, prayerBlockStartTime: now });
 
   // Notify all tabs to show the overlay
   const tabs = await chrome.tabs.query({});
@@ -298,6 +336,7 @@ async function triggerBlock(prayer) {
 
 async function unblock() {
   await chrome.storage.local.set({ blocked: false, currentPrayer: null, currentTask: null });
+  await chrome.storage.local.remove('prayerBlockStartTime');
 
   const tabs = await chrome.tabs.query({});
   for (const tab of tabs) {
@@ -308,7 +347,8 @@ async function unblock() {
 }
 
 async function triggerTaskBlock(taskName) {
-  await chrome.storage.local.set({ blocked: true, currentTask: taskName, currentPrayer: null });
+  const now = Date.now();
+  await chrome.storage.local.set({ blocked: true, currentTask: taskName, currentPrayer: null, prayerBlockStartTime: now });
 
   // Notify all tabs to show the overlay
   const tabs = await chrome.tabs.query({});
@@ -327,4 +367,15 @@ async function triggerTaskBlock(taskName) {
     priority: 2,
     requireInteraction: true
   });
+}
+
+async function checkAndClearStaleBlock() {
+  const d = await chrome.storage.local.get(['blocked', 'prayerBlockStartTime']);
+  if (d.blocked && d.prayerBlockStartTime) {
+    const elapsed = Date.now() - d.prayerBlockStartTime;
+    const EXPIRATION_THRESHOLD = 45 * 60 * 1000; // 45 minutes
+    if (elapsed > EXPIRATION_THRESHOLD) {
+      await unblock();
+    }
+  }
 }
